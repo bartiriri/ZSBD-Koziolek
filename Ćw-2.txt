@@ -1,0 +1,165 @@
+ZSBD 2021/2022 letni
+Bartosz KOziołek 145906
+
+I. Usuń wszystkie tabele ze swojej bazy danych. 
+
+DROP TABLE *;
+
+II. Przekopiuj wszystkie tabele wraz z danymi od użytkownika HR. Poustawiaj klcuze główne i obce.
+
+-- Kopiowanie tabel od użytkownika HR
+CREATE TABLE regions AS SELECT * FROM HR.regions;
+CREATE TABLE countries AS SELECT * FROM HR.countries;
+CREATE TABLE locations AS SELECT * FROM HR.locations;
+CREATE TABLE departments AS SELECT * FROM HR.departments;
+CREATE TABLE job_history AS SELECT * FROM HR.job_history;
+CREATE TABLE jobs AS SELECT * FROM HR.jobs;
+CREATE TABLE employees AS SELECT * FROM HR.employees;
+
+-- Dodawanie kluczy głównych do tabel
+ALTER TABLE regions ADD(PRIMARY KEY (region_id));
+ALTER TABLE countries ADD(PRIMARY KEY (country_id));
+ALTER TABLE locations ADD(PRIMARY KEY (location_id));
+ALTER TABLE departments ADD(PRIMARY KEY (department_id));
+ALTER TABLE job_history ADD(PRIMARY KEY (employee_id, start_date));
+ALTER TABLE jobs ADD(PRIMARY KEY (job_id));
+ALTER TABLE employees ADD(PRIMARY KEY (employee_id));
+
+
+-- Dodawanie kluczy obcych do tabel
+ALTER TABLE countries ADD(
+	FOREIGN KEY (region_id)REFERENCES regions(region_id) ON DELETE SET NULL
+)
+
+ALTER TABLE locations ADD(
+	FOREIGN KEY (country_id)REFERENCES countries(country_id) ON DELETE SET NULL
+)
+
+ALTER TABLE departments  ADD(
+	FOREIGN KEY (manager_id)REFERENCES employees(employee_id) ON DELETE SET NULL,
+	FOREIGN KEY (location_id)REFERENCES locations(location_id) ON DELETE SET NULL
+)
+
+ALTER TABLE job_history ADD(
+	FOREIGN KEY (job_id)REFERENCES jobs(job_id) ON DELETE SET NULL,
+	FOREIGN KEY (department_id)REFERENCES departments(department_id) ON DELETE SET NULL
+)
+
+ALTER TABLE employees ADD(
+	FOREIGN KEY (job_id)REFERENCES jobs(job_id) ON DELETE SET NULL,
+	FOREIGN KEY (manager_id)REFERENCES employees(employee_id) ON DELETE SET NULL,
+	FOREIGN KEY (department_id)REFERENCES departments(department_id) ON DELETE SET NULL
+)
+
+III. Stwórz następujące perspektywy lub zapytania, dodaj wszystko do swojego repozytorium:
+
+1. Z tabeli employees wypisz w jednej kolumnie nazwisko i zarobki – nazwij kolumnę wynagrodzenie,
+ dla osób z departamentów 20 i 50 z zarobkami pomiędzy 2000 a 7000, uporządkuj kolumny według
+ nazwiska.
+
+SELECT CONCAT(CONCAT(last_name, ' '),salary) AS wynagrodzenie
+FROM employees
+WHERE (department_id IN (20,50)) AND (salary BETWEEN 2000 AND 7000)
+ORDER BY last_name;
+
+2. Z tabeli employees wyciągnąć informację data zatrudnienia, nazwisko oraz kolumnę podaną
+ przez użytkownika dla osób mających menadżera zatrudnionych w roku 2005. Uporządkować według
+ kolumny podanej przez użytkownika.
+
+SELECT hire_date AS data_zatrudnienia, last_name AS nazwisko, &kolumna_uzytkownika
+FROM employees
+WHERE (manager_id IS NOT null) 
+AND (hire_date BETWEEN TO_DATE ('2005/01/01', 'yyyy/mm/dd') AND TO_DATE ('2005/12/31', 'yyyy/mm/dd'))
+ORDER BY &kolumna_uzytkownika;
+
+3. Wypisać imiona i nazwiska  razem, zarobki oraz numer telefonu porządkując dane według pierwszej
+ kolumny malejąco  a następnie drugiej rosnąco (użyć numerów do porządkowania) dla osób z trzecią
+ literą nazwiska ‘e’ oraz częścią imienia podaną przez użytkownika.
+
+SELECT CONCAT(CONCAT(first_name, ' '),last_name) AS imie_nazwisko, salary AS zarobki, phone_number AS 
+telefon 
+FROM employees
+WHERE (SUBSTR(last_name,3,1)= 'e')  AND (first_name LIKE '%&tekst%')
+ORDER BY imie_nazwisko ASC, telefon DESC;
+
+
+4. Wypisać imię i nazwisko, liczbę miesięcy przepracowanych – funkcje months_between oraz round
+ oraz kolumnę wysokość_dodatku jako (użyć CASE lub DECODE):
+ 10% wynagrodzenia dla liczby miesięcy do 150
+20% wynagrodzenia dla liczby miesięcy od 150 do 200
+30% wynagrodzenia dla liczby miesięcy od 200
+uporządkować według liczby miesięcy
+
+SELECT first_name AS imie, last_name AS nazwisko,
+ROUND (MONTHS_BETWEEN(TO_DATE(SYSDATE, 'YY/MM/DD'), TO_DATE(hire_date) )) AS miesiace_pracy,
+CASE WHEN ROUND (MONTHS_BETWEEN(TO_DATE(SYSDATE, 'YY/MM/DD'),TO_DATE(hire_date) )) < 150 THEN salary*0.1
+WHEN ROUND (MONTHS_BETWEEN(TO_DATE(SYSDATE, 'YY/MM/DD'),TO_DATE(hire_date) )) BETWEEN 150 AND 199 
+THEN salary*0.2 ELSE salary*0.3 END AS premia
+FROM employees
+ORDER BY miesiace_pracy;
+
+
+5. Dla każdego działów w których minimalna płaca jest wyższa niż 5000 wypisz sumę oraz
+ średnią zarobków zaokrągloną do całości nazwij odpowiednio kolumny.
+
+SELECT department_id AS id_departamentu, SUM(salary) AS suma_zarobkow, ROUND(AVG(salary),0) AS srednia_zarobkow
+FROM employees
+GROUP BY department_id
+HAVING MIN(salary) > 5000
+
+
+6. Wypisać nazwisko, numer departamentu, nazwę departamentu, id pracy, dla osób z pracujących
+ Toronto.
+
+SELECT employees.last_name AS nazwisko, employees.department_id AS id_departamentu, departments.department_name AS nazwa_departamentu,
+job_id AS id_pracy
+FROM employees, departments
+WHERE departments.department_id = employees.department_id
+AND  departments.location_id IN (SELECT location_id FROM locations WHERE locations.city = 'Toronto')
+
+
+7. Dla pracowników o imieniu „Jennifer” wypisz imię i nazwisko tego pracownika oraz osoby
+ które z nim współpracują.
+
+SELECT pracownik.first_name AS imie, pracownik.last_name AS nazwisko, wspolpracownik.first_name,
+wspolpracownik.last_name
+FROM employees pracownik 
+JOIN employees wspolpracownik ON pracownik.first_name = 'Jennifer' AND pracownik.department_id = pracownik.department_id
+
+8. Wypisać wszystkie departamenty w których nie ma pracowników
+
+SELECT department_id AS id_departamentu, department_name AS nazwa_departamentu
+FROM departments dep
+WHERE (SELECT COUNT(department_id) FROM employees WHERE employees.department_id = dep.department_id) = 0
+
+
+9. Skopiuj tabelę Job_grades od użytkownika HR
+
+CREATE TABLE job_grades AS SELECT * FROM HR.job_grades;
+
+
+10. Wypisz imię i nazwisko, id pracy, nazwę departamentu, zarobki, oraz odpowiedni grade dla 
+każdego pracownika
+
+
+SELECT employees.first_name AS imie, employees.last_name AS nazwisko, employees.job_id AS id_pracy, 
+departments.department_name AS nazwa_departamentu, employees.salary AS zarobki, job_grades.grade AS grade
+FROM employees
+JOIN departments ON employees.department_id = departments.department_id
+JOIN job_grades ON employees.salary BETWEEN job_grades.min_salary AND job_grades.max_salary
+
+
+11. Wypisz imię nazwisko oraz zarobki dla osób które zarabiają więcej niż średnia wszystkich,
+ uporządkuj malejąco według zarobków.
+
+SELECT first_name AS imie, last_name AS nazwisko, salary AS zarobki 
+FROM employees
+WHERE salary > (SELECT AVG(salary) FROM employees)
+ORDER BY salary DESC
+
+
+12. Wypisz id imie i nazwisko osób, które pracują w departamencie z osobami mającymi w nazwisku „u”
+
+SELECT employee_id AS id_pracownika, first_name AS imie, last_name AS nazwisko
+FROM employees
+WHERE department_id IN (SELECT department_id FROM employees WHERE last_name LIKE '%u%')

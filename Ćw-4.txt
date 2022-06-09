@@ -1,0 +1,135 @@
+ZSBD 2021/2022 letni
+Bartosz Koziołek 145906
+
+STWÓRZ FUNKCJE:
+
+1. Zwracającą nazwę pracy dla podanego parametru id, dodaj wyjątek, jeśli taka praca nie istnieje.
+
+CREATE or REPLACE function nazwa_pracy
+(job_id in out INT)
+return varchar
+
+
+2. zwracającą roczne zarobki (wynagrodzenie 12-to miesięczne plus premia jako wynagrodzenie * commission_pct)
+ dla pracownika o podanym id.
+
+CREATE or REPLACE function roczne_zarobki
+(@pracownik_id INT)
+return INT
+declare 
+	pensja INT;
+	premia INT;
+AS
+BEGIN
+	SELECT 	salary INTO pensja FROM employees where employee_id = @pracownik_id;
+	SELECT  commission_pct INTO premia FROM employees where employee_id = @pracownik_id;
+END;
+
+
+3. biorącą w nawias numer kierunkowy z numeru telefonu podanego jako varchar.
+
+
+4. Dla podanego w parametrze ciągu znaków zmieniającą pierwszą i ostatnią literę na 
+wielką – pozostałe na małe.
+
+
+5. Dla podanego peselu - przerabiającą pesel na datę urodzenia w formacie ‘yyyy-mm-dd’.
+
+
+6. Zwracającą liczbę pracowników oraz liczbę departamentów które znajdują się w kraju 
+podanym jako parametr (nazwa kraju). W przypadku braku kraju - odpowiedni wyjątek.
+
+
+
+STWÓRZ NASTĘPUJĄCE WYZWALACZE:
+
+1. Stworzyć tabelę archiwum_departamentów (id, nazwa, data_zamknięcia, ostatni_manager jako imię i nazwisko).
+ Po usunięciu departamentu dodać odpowiedni rekord do tej tabeli.
+
+CREATE TABLE archiwum_departamentow (
+	id INT ,
+	nazwa VARCHAR(50)
+	data_zamkniecia DATE,
+	ostatni_manager VARCHAR(150)
+)
+
+CREATE or REPLACE TRIGGER delete_department
+AFTER DELETE ON departments 
+REFERENCING NEW AS NEW OLD AS OLD
+FOR EACH ROW
+DECLARE
+old_manager varchar(150);
+BEGIN  
+    SELECT CONCAT(CONCAT(first_name,' '),last_name) INTO old_manager  FROM employees WHERE employee_id = :old.manager_id;
+    INSERT INTO archiwum_departamentow VALUES(:old.department_id,:old.department_name,SYSDATE,old_manager);
+END;
+
+
+2. W razie UPDATE i INSERT na tabeli employees, sprawdzić czy zarobki łapią się w widełkach 2000 - 26000.
+ Jeśli nie łapią się - zabronić dodania. Dodać tabelę złodziej(id, USER, czas_zmiany), której będą 
+wrzucane logi, jeśli będzie próba dodania, bądź zmiany wynagrodzenia poza widełki.
+
+CREATE TABLE zlodziej(
+	id INT PRIMARY KEY,
+	user VARCHAR(100),
+	czas_zmiany DATE
+)
+
+CREATE or REPLACE TRIGGER check_sallary
+BEFORE INSERT OR UPDATE ON employees
+REFERENCING NEW AS NEW OLD AS OLD
+FOR EACH ROW
+DECLARE 
+wrong_salary EXCEPTION;
+BEGIN
+	IF (:new.salary<2000 OR :new.salary>26000) THEN 
+	RAISE wrong_salary;		
+	END IF;
+EXCEPTION
+WHEN wrong_salary THEN
+DBMS_OUTPUT.put_line('wynagrodzenie poza widełkami');
+END;
+
+3. Stworzyć sekwencję i wyzwalacz, który będzie odpowiadał za auto_increment w tabeli employees.
+create sequence employee_id minvalue 1 start with 1 cache 10;
+
+CREATE OR REPLACE TRIGGER employees_increment
+BEFORE INSERT on employees
+REFERENCING NEW AS NEW OLD AS OLD
+FOR EACH ROW
+BEGIN
+	:new.employee_id := employee_id.nextval;
+END;
+
+4. Stworzyć wyzwalacz, który zabroni dowolnej operacji na tabeli JOB_GRADES (INSERT, UPDATE, DELETE).
+
+CREATE or REPLACE TRIGGER deny_job_grades
+BEFORE INSERT OR UPDATE OR DELETE on job_grades
+REFERENCING NEW AS NEW OLD AS OLD
+FOR EACH ROW
+DECLARE
+change_denied EXCEPTION;
+BEGIN
+	RAISE change_denied;
+EXCEPTION
+WHEN change_denied THEN
+DBMS_OUTPUT.put_line('zakaz wykonywania operacji');
+RAISE_APPLICATION_ERROR(-20002,'THE PRICE IS NOT IN THE RANGE FOR PRODUCT');
+END;
+
+5. Stworzyć wyzwalacz, który przy próbie zmiany max i min salary w tabeli jobs zostawia stare wartości.
+CREATE or REPLACE TRIGGER old_salary
+AFTER UPDATE ON jobs
+REFERENCING NEW AS NEW OLD AS OLD
+FOR EACH ROW
+BEGIN
+	:new.max_salary = :old.max_salary;
+	:new.min_salary = :old.min_salary;
+END;
+
+STWORZYĆ PACZKI:
+
+1. Składającą się ze stworzonych procedur i funkcji.
+
+2. Stworzyć paczkę z procedurami i funkcjami do obsługi tabeli REGIONS (CRUD), 
+gdzie odczyt z różnymi parametrami.
